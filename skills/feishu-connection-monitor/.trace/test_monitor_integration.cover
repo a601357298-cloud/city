@@ -1,0 +1,86 @@
+    1: import os
+    1: import tempfile
+    1: import time
+    1: import unittest
+    1: from pathlib import Path
+       
+    1: from monitor import ConfigManager, ConnectionMonitor, JsonlLogger
+       
+       
+    2: class IntegrationHttpClient:
+    1:     def __init__(self):
+    1:         self.offline = True
+    1:         self.alert_count = 0
+    1:         self.recovery_count = 0
+       
+    1:     def get(self, url, headers, timeout):
+    4:         if self.offline:
+    2:             return 500, "network down"
+    2:         return 200, "ok"
+       
+    1:     def post_json(self, url, payload, headers, timeout):
+    2:         if "token-refresh" in url:
+    1:             self.recovery_count += 1
+    1:             self.offline = False
+    1:             return 200, "ok"
+    1:         if "rebuild-channel" in url:
+                   return 200, "ok"
+    1:         if "alert" in url:
+    1:             self.alert_count += 1
+    1:             return 200, "ok"
+               return 404, "missing"
+       
+       
+    2: class MonitorIntegrationTest(unittest.TestCase):
+    1:     def setUp(self):
+    1:         self.temp_dir = tempfile.TemporaryDirectory()
+    1:         self.config_path = os.path.join(self.temp_dir.name, "feishu-monitor.yaml")
+    1:         self.signal_file = os.path.join(self.temp_dir.name, "receive.signal")
+    1:         self.log_dir = os.path.join(self.temp_dir.name, "logs")
+    1:         old = time.time() - 61
+    1:         Path(self.signal_file).write_text("stale", encoding="utf-8")
+    1:         os.utime(self.signal_file, (old, old))
+    4:         content = f"""
+       monitor:
+         heartbeat_seconds: 30
+         timeout_seconds: 30
+         failure_threshold: 1
+         idempotent_window_seconds: 300
+       probes:
+         send_probe_url: "http://local/send-health"
+         receive_probe_url: "http://local/receive-health"
+    1:   receive_signal_file: "{self.signal_file}"
+         auth_token: ""
+       recovery:
+         token_refresh_url: "http://local/recover/token-refresh"
+         channel_rebuild_url: "http://local/recover/rebuild-channel"
+         receiver_restart_cmd: "/bin/true"
+         check_delay_seconds: 0
+       alert:
+         webhook_url: "http://local/alert"
+         cooldown_seconds: 0
+       logging:
+    1:   log_dir: "{self.log_dir}"
+    1: """.strip()
+    1:         Path(self.config_path).write_text(content, encoding="utf-8")
+       
+    1:     def tearDown(self):
+    1:         self.temp_dir.cleanup()
+       
+    1:     def test_simulate_60s_disconnect_then_auto_recover(self):
+    1:         config_manager = ConfigManager(self.config_path)
+    1:         cfg = config_manager.load_if_changed()
+    1:         http_client = IntegrationHttpClient()
+    2:         monitor = ConnectionMonitor(config_manager, JsonlLogger(cfg.log_dir), http_client, sleeper=lambda _: None)
+    1:         first = monitor.run_once(cfg)
+    1:         self.assertEqual(first["status"], "up")
+    1:         self.assertIn("refresh_token", first["recovery_action"])
+    1:         self.assertEqual(http_client.recovery_count, 1)
+    1:         files = list(Path(self.log_dir).glob("feishu-monitor-*.log"))
+    1:         self.assertTrue(files)
+    1:         payload = files[0].read_text(encoding="utf-8")
+    1:         self.assertIn("recovery_action", payload)
+       
+       
+    1: if __name__ == "__main__":
+           unittest.main()

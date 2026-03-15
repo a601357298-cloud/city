@@ -1,0 +1,278 @@
+    1: import json
+    1: import os
+    1: import tempfile
+    1: import threading
+    1: import time
+    1: import unittest
+    1: from http.server import BaseHTTPRequestHandler, HTTPServer
+    1: from pathlib import Path
+       
+    1: from monitor import AlertManager, ConfigManager, ConnectionMonitor, HttpClient, JsonlLogger, MonitorConfig, SimpleYamlParser, validate_config
+       
+       
+    2: class DummyConfigManager:
+    1:     def __init__(self, cfg: MonitorConfig):
+    7:         self.cfg = cfg
+       
+    1:     def load_if_changed(self) -> MonitorConfig:
+    1:         return self.cfg
+       
+       
+    2: class StatefulHandler(BaseHTTPRequestHandler):
+    1:     routes = {}
+    1:     post_routes = {}
+       
+    1:     def do_GET(self):
+    1:         code, body = self.routes.get(self.path, (404, "not found"))
+    1:         self.send_response(code)
+    1:         self.end_headers()
+    1:         self.wfile.write(body.encode("utf-8"))
+       
+    1:     def do_POST(self):
+               code, body = self.post_routes.get(self.path, (404, "not found"))
+               self.send_response(code)
+               self.end_headers()
+               self.wfile.write(body.encode("utf-8"))
+       
+    1:     def log_message(self, format, *args):
+    1:         return
+       
+       
+    2: class FakeHttpClient:
+    1:     def __init__(self):
+    7:         self.state = {
+    7:             "send_ok": False,
+    7:             "receive_ok": False,
+    7:             "send_code": 500,
+    7:             "token_ok": True,
+    7:             "rebuild_ok": True,
+    7:             "alert_ok": True,
+               }
+    7:         self.calls = []
+       
+    1:     def get(self, url, headers, timeout):
+   20:         self.calls.append(("get", url))
+   20:         if "send-health" in url:
+   10:             if self.state["send_ok"]:
+    4:                 return 200, "ok"
+    6:             return self.state["send_code"], "send down"
+   10:         if "receive-health" in url:
+   10:             return (200, "ok") if self.state["receive_ok"] else (500, "receive down")
+               return (404, "missing")
+       
+    1:     def post_json(self, url, payload, headers, timeout):
+   12:         self.calls.append(("post", url))
+   12:         if "token-refresh" in url:
+    5:             if self.state["token_ok"]:
+    4:                 self.state["send_ok"] = True
+    4:                 self.state["receive_ok"] = True
+    4:                 return 200, "ok"
+    1:             return 401, "unauthorized"
+    7:         if "rebuild-channel" in url:
+    1:             return (200, "ok") if self.state["rebuild_ok"] else (500, "error")
+    6:         if "alert" in url:
+    6:             return (200, "ok") if self.state["alert_ok"] else (500, "error")
+               return 404, "missing"
+       
+       
+    2: class MonitorUnitTest(unittest.TestCase):
+    1:     def setUp(self):
+   11:         self.temp_dir = tempfile.TemporaryDirectory()
+   11:         self.log_dir = os.path.join(self.temp_dir.name, "logs")
+   11:         self.signal_file = os.path.join(self.temp_dir.name, "signal.txt")
+   22:         self.base_cfg = MonitorConfig(
+   11:             heartbeat_seconds=30,
+   11:             timeout_seconds=30,
+   11:             failure_threshold=1,
+   11:             idempotent_window_seconds=300,
+   11:             send_probe_url="http://127.0.0.1:19080/send-health",
+   11:             receive_probe_url="http://127.0.0.1:19080/receive-health",
+   11:             receive_signal_file=self.signal_file,
+   11:             token_refresh_url="http://127.0.0.1:19080/recover/token-refresh",
+   11:             channel_rebuild_url="http://127.0.0.1:19080/recover/rebuild-channel",
+   11:             receiver_restart_cmd="/bin/true",
+   11:             alert_webhook_url="http://127.0.0.1:19080/alert",
+   11:             alert_cooldown_seconds=60,
+   11:             log_dir=self.log_dir,
+   11:             recovery_check_delay_seconds=0,
+   11:             headers={"Content-Type": "application/json", "Authorization": ""},
+               )
+       
+    1:     def tearDown(self):
+   11:         self.temp_dir.cleanup()
+       
+    1:     def _start_server(self, routes, post_routes):
+    1:         StatefulHandler.routes = routes
+    1:         StatefulHandler.post_routes = post_routes
+    1:         server = HTTPServer(("127.0.0.1", 19080), StatefulHandler)
+    1:         thread = threading.Thread(target=server.serve_forever, daemon=True)
+    1:         thread.start()
+    1:         return server
+       
+    1:     def test_send_probe_200_branch(self):
+    2:         server = self._start_server(
+    1:             {"/send-health": (200, "ok"), "/receive-health": (200, "ok")},
+    1:             {"/alert": (200, "ok")},
+               )
+    1:         try:
+    1:             Path(self.signal_file).write_text("ok", encoding="utf-8")
+    1:             monitor = ConnectionMonitor(DummyConfigManager(self.base_cfg), JsonlLogger(self.log_dir), HttpClient(), sleeper=lambda _: None)
+    1:             result = monitor.run_once(self.base_cfg)
+    1:             self.assertEqual(result["status"], "up")
+               finally:
+    1:             server.shutdown()
+    1:             server.server_close()
+       
+    1:     def test_send_probe_401_branch(self):
+    1:         fake_http = FakeHttpClient()
+    1:         fake_http.state["send_code"] = 401
+    1:         Path(self.signal_file).write_text("ok", encoding="utf-8")
+    1:         old = time.time() - 120
+    1:         os.utime(self.signal_file, (old, old))
+    2:         monitor = ConnectionMonitor(DummyConfigManager(self.base_cfg), JsonlLogger(self.log_dir), fake_http, sleeper=lambda _: None)
+    1:         result = monitor.run_once(self.base_cfg)
+    1:         self.assertIn("send_probe_failed:401", result["error"])
+       
+    1:     def test_send_probe_500_branch(self):
+    1:         fake_http = FakeHttpClient()
+    1:         fake_http.state["send_code"] = 500
+    1:         Path(self.signal_file).write_text("ok", encoding="utf-8")
+    1:         old = time.time() - 120
+    1:         os.utime(self.signal_file, (old, old))
+    2:         monitor = ConnectionMonitor(DummyConfigManager(self.base_cfg), JsonlLogger(self.log_dir), fake_http, sleeper=lambda _: None)
+    1:         result = monitor.run_once(self.base_cfg)
+    1:         self.assertIn("send_probe_failed:500", result["error"])
+       
+    1:     def test_idempotent_window_suppresses_recovery(self):
+    1:         fake_http = FakeHttpClient()
+    2:         monitor = ConnectionMonitor(DummyConfigManager(self.base_cfg), JsonlLogger(self.log_dir), fake_http, sleeper=lambda _: None)
+    1:         first = monitor.run_once(self.base_cfg)
+    1:         self.assertIn("refresh_token", first["recovery_action"])
+    1:         fake_http.state["send_ok"] = False
+    1:         fake_http.state["receive_ok"] = False
+    1:         second = monitor.run_once(self.base_cfg)
+    1:         self.assertEqual(second["recovery_action"], "suppress_recovery_in_window")
+       
+    1:     def test_json_log_fields_complete(self):
+    1:         fake_http = FakeHttpClient()
+    2:         monitor = ConnectionMonitor(DummyConfigManager(self.base_cfg), JsonlLogger(self.log_dir), fake_http, sleeper=lambda _: None)
+    1:         monitor.run_once(self.base_cfg)
+    1:         files = list(Path(self.log_dir).glob("feishu-monitor-*.log"))
+    1:         self.assertTrue(files)
+    1:         line = files[0].read_text(encoding="utf-8").strip().splitlines()[-1]
+    1:         payload = json.loads(line)
+    1:         self.assertIn("timestamp", payload)
+    1:         self.assertIn("status", payload)
+    1:         self.assertIn("latency_ms", payload)
+    1:         self.assertIn("error", payload)
+    1:         self.assertIn("recovery_action", payload)
+       
+    1:     def test_validate_config_key_fields(self):
+    2:         bad_cfg = MonitorConfig(
+    1:             heartbeat_seconds=61,
+    1:             timeout_seconds=30,
+    1:             failure_threshold=1,
+    1:             idempotent_window_seconds=300,
+    1:             send_probe_url="",
+    1:             receive_probe_url="x",
+    1:             receive_signal_file="x",
+    1:             token_refresh_url="x",
+    1:             channel_rebuild_url="x",
+    1:             receiver_restart_cmd="x",
+    1:             alert_webhook_url="x",
+    1:             alert_cooldown_seconds=60,
+    1:             log_dir="x",
+    1:             recovery_check_delay_seconds=1,
+    1:             headers={},
+               )
+    2:         with self.assertRaises(ValueError):
+    1:             validate_config(bad_cfg)
+       
+    1:     def test_config_hot_reload(self):
+    1:         config_path = os.path.join(self.temp_dir.name, "config.yaml")
+    4:         first = f"""
+       monitor:
+         heartbeat_seconds: 30
+         timeout_seconds: 30
+         failure_threshold: 3
+         idempotent_window_seconds: 300
+       probes:
+         send_probe_url: "http://127.0.0.1/send-health"
+         receive_probe_url: "http://127.0.0.1/receive-health"
+    1:   receive_signal_file: "{self.signal_file}"
+         auth_token: ""
+       recovery:
+         token_refresh_url: "http://127.0.0.1/recover/token-refresh"
+         channel_rebuild_url: "http://127.0.0.1/recover/rebuild-channel"
+         receiver_restart_cmd: "/bin/true"
+         check_delay_seconds: 1
+       alert:
+         webhook_url: "http://127.0.0.1/alert"
+         cooldown_seconds: 120
+       logging:
+    1:   log_dir: "{self.log_dir}"
+    1: """.strip()
+    1:         Path(config_path).write_text(first, encoding="utf-8")
+    1:         manager = ConfigManager(config_path)
+    1:         cfg1 = manager.load_if_changed()
+    1:         self.assertEqual(cfg1.heartbeat_seconds, 30)
+    1:         time.sleep(0.02)
+    1:         second = first.replace("heartbeat_seconds: 30", "heartbeat_seconds: 20")
+    1:         Path(config_path).write_text(second, encoding="utf-8")
+    1:         cfg2 = manager.load_if_changed()
+    1:         self.assertEqual(cfg2.heartbeat_seconds, 20)
+       
+    1:     def test_recovery_escalation_path(self):
+    1:         fake_http = FakeHttpClient()
+    1:         fake_http.state["token_ok"] = False
+    1:         fake_http.state["rebuild_ok"] = False
+    1:         cfg = MonitorConfig(**{**self.base_cfg.__dict__, "receiver_restart_cmd": "/bin/false"})
+    1:         monitor = ConnectionMonitor(DummyConfigManager(cfg), JsonlLogger(self.log_dir), fake_http, sleeper=lambda _: None)
+    1:         result = monitor.run_once(cfg)
+    1:         self.assertIn("escalate_alert", result["recovery_action"])
+    1:         self.assertEqual(result["status"], "recovering")
+       
+    1:     def test_alert_noise_control(self):
+    1:         fake_http = FakeHttpClient()
+    1:         cfg = MonitorConfig(**{**self.base_cfg.__dict__, "alert_cooldown_seconds": 60})
+    1:         manager = AlertManager(fake_http)
+    1:         ok1 = manager.send_card(cfg, "down", "x", "a")
+    1:         ok2 = manager.send_card(cfg, "down", "x", "a")
+    1:         self.assertTrue(ok1)
+    1:         self.assertFalse(ok2)
+       
+    1:     def test_yaml_scalar_parse(self):
+    2:         data = """
+       root:
+         text1: "abc"
+         text2: 'def'
+         bool1: true
+         bool2: false
+         null1: null
+         number1: 12
+         number2: 1.5
+    1: """.strip()
+    1:         parsed = SimpleYamlParser.parse(data)
+    1:         self.assertEqual(parsed["root"]["text1"], "abc")
+    1:         self.assertEqual(parsed["root"]["text2"], "def")
+    1:         self.assertEqual(parsed["root"]["bool1"], True)
+    1:         self.assertEqual(parsed["root"]["bool2"], False)
+    1:         self.assertEqual(parsed["root"]["null1"], None)
+    1:         self.assertEqual(parsed["root"]["number1"], 12)
+    1:         self.assertEqual(parsed["root"]["number2"], 1.5)
+       
+    1:     def test_run_forever_loop(self):
+    1:         fake_http = FakeHttpClient()
+    1:         monitor = ConnectionMonitor(DummyConfigManager(self.base_cfg), JsonlLogger(self.log_dir), fake_http)
+    2:         monitor.run_once = lambda cfg=None: None
+       
+    1:         def stop_sleep(_):
+    1:             raise RuntimeError("stop")
+       
+    1:         monitor.sleeper = stop_sleep
+    2:         with self.assertRaises(RuntimeError):
+    1:             monitor.run_forever()
+       
+       
+    1: if __name__ == "__main__":
+           unittest.main()

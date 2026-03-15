@@ -1,0 +1,353 @@
+    1: import json
+    1: import os
+    1: import subprocess
+    1: import time
+    1: import urllib.error
+    1: import urllib.request
+    1: from dataclasses import dataclass
+    1: from datetime import datetime
+    1: from pathlib import Path
+    1: from typing import Any, Callable, Dict, List, Optional, Tuple
+       
+       
+    3: @dataclass
+    2: class MonitorConfig:
+    1:     heartbeat_seconds: int
+    1:     timeout_seconds: int
+    1:     failure_threshold: int
+    1:     idempotent_window_seconds: int
+    1:     send_probe_url: str
+    1:     receive_probe_url: str
+    1:     receive_signal_file: str
+    1:     token_refresh_url: str
+    1:     channel_rebuild_url: str
+    1:     receiver_restart_cmd: str
+    1:     alert_webhook_url: str
+    1:     alert_cooldown_seconds: int
+    1:     log_dir: str
+    1:     recovery_check_delay_seconds: int
+    1:     headers: Dict[str, str]
+       
+       
+    2: class SimpleYamlParser:
+    2:     @staticmethod
+    2:     def parse(text: str) -> Dict[str, Any]:
+    4:         root: Dict[str, Any] = {}
+    4:         stack: List[Tuple[int, Dict[str, Any]]] = [(-1, root)]
+   72:         for raw_line in text.splitlines():
+   68:             if not raw_line.strip():
+                       continue
+   68:             line = raw_line.rstrip()
+   68:             stripped = line.lstrip()
+   68:             if stripped.startswith("#"):
+                       continue
+   68:             indent = len(line) - len(stripped)
+   68:             if ":" not in stripped:
+                       continue
+   68:             key, value = stripped.split(":", 1)
+   68:             key = key.strip()
+   68:             value = value.strip()
+   80:             while stack and indent <= stack[-1][0]:
+   12:                 stack.pop()
+   68:             parent = stack[-1][1]
+   68:             if value == "":
+   16:                 node: Dict[str, Any] = {}
+   16:                 parent[key] = node
+   16:                 stack.append((indent, node))
+                   else:
+   52:                 parent[key] = SimpleYamlParser._to_scalar(value)
+    4:         return root
+       
+    2:     @staticmethod
+    2:     def _to_scalar(value: str) -> Any:
+   52:         if value.startswith('"') and value.endswith('"'):
+   28:             return value[1:-1]
+   24:         if value.startswith("'") and value.endswith("'"):
+    1:             return value[1:-1]
+   23:         if value.lower() == "true":
+    1:             return True
+   22:         if value.lower() == "false":
+    1:             return False
+   21:         if value.lower() in {"null", "none"}:
+    1:             return None
+   20:         try:
+   20:             if "." in value:
+    1:                 return float(value)
+   19:             return int(value)
+               except ValueError:
+                   return value
+       
+       
+    2: class ConfigManager:
+    1:     def __init__(self, config_path: str):
+    2:         self.config_path = config_path
+    2:         self._last_mtime: Optional[float] = None
+    2:         self._config: Optional[MonitorConfig] = None
+       
+    1:     def load_if_changed(self) -> MonitorConfig:
+    3:         mtime = os.path.getmtime(self.config_path)
+    3:         if self._config is None or self._last_mtime != mtime:
+    3:             self._config = self._load()
+    3:             self._last_mtime = mtime
+    3:         return self._config
+       
+    1:     def _load(self) -> MonitorConfig:
+    3:         content = Path(self.config_path).read_text(encoding="utf-8")
+    3:         raw = SimpleYamlParser.parse(content)
+    6:         cfg = MonitorConfig(
+    3:             heartbeat_seconds=int(raw["monitor"]["heartbeat_seconds"]),
+    3:             timeout_seconds=int(raw["monitor"]["timeout_seconds"]),
+    3:             failure_threshold=int(raw["monitor"]["failure_threshold"]),
+    3:             idempotent_window_seconds=int(raw["monitor"]["idempotent_window_seconds"]),
+    3:             send_probe_url=str(raw["probes"]["send_probe_url"]),
+    3:             receive_probe_url=str(raw["probes"]["receive_probe_url"]),
+    3:             receive_signal_file=str(raw["probes"]["receive_signal_file"]),
+    3:             token_refresh_url=str(raw["recovery"]["token_refresh_url"]),
+    3:             channel_rebuild_url=str(raw["recovery"]["channel_rebuild_url"]),
+    3:             receiver_restart_cmd=str(raw["recovery"]["receiver_restart_cmd"]),
+    3:             alert_webhook_url=str(raw["alert"]["webhook_url"]),
+    3:             alert_cooldown_seconds=int(raw["alert"]["cooldown_seconds"]),
+    3:             log_dir=str(raw["logging"]["log_dir"]),
+    3:             recovery_check_delay_seconds=int(raw["recovery"]["check_delay_seconds"]),
+    3:             headers={
+    3:                 "Content-Type": "application/json",
+    3:                 "Authorization": str(raw["probes"].get("auth_token", "")),
+                   },
+               )
+    3:         validate_config(cfg)
+    3:         return cfg
+       
+       
+    1: def validate_config(config: MonitorConfig) -> None:
+    4:     required_values = [
+    4:         config.send_probe_url,
+    4:         config.receive_probe_url,
+    4:         config.receive_signal_file,
+    4:         config.token_refresh_url,
+    4:         config.channel_rebuild_url,
+    4:         config.receiver_restart_cmd,
+    4:         config.alert_webhook_url,
+    4:         config.log_dir,
+           ]
+   32:     if any(v is None or str(v).strip() == "" for v in required_values):
+    1:         raise ValueError("配置关键字段缺失")
+    3:     if config.heartbeat_seconds > 60:
+               raise ValueError("heartbeat_seconds 必须不大于 60")
+    3:     if config.timeout_seconds > 30:
+               raise ValueError("timeout_seconds 必须不大于 30")
+    3:     if config.failure_threshold < 1:
+               raise ValueError("failure_threshold 必须大于 0")
+       
+       
+    2: class JsonlLogger:
+    1:     def __init__(self, log_dir: str):
+    8:         self.log_dir = Path(log_dir)
+    8:         self.log_dir.mkdir(parents=True, exist_ok=True)
+       
+    1:     def write(self, status: str, latency_ms: int, error: str, recovery_action: str) -> None:
+    8:         now = datetime.now()
+    8:         file_path = self.log_dir / f"feishu-monitor-{now.strftime('%Y-%m-%d')}.log"
+    8:         payload = {
+    8:             "timestamp": now.isoformat(),
+    8:             "status": status,
+    8:             "latency_ms": latency_ms,
+    8:             "error": error,
+    8:             "recovery_action": recovery_action,
+               }
+   16:         with file_path.open("a", encoding="utf-8") as fp:
+    8:             fp.write(json.dumps(payload, ensure_ascii=False) + "\n")
+       
+       
+    2: class HttpClient:
+    1:     def post_json(self, url: str, payload: Dict[str, Any], headers: Dict[str, str], timeout: int) -> Tuple[int, str]:
+               data = json.dumps(payload).encode("utf-8")
+               request = urllib.request.Request(url=url, data=data, method="POST")
+               for key, value in headers.items():
+                   if value:
+                       request.add_header(key, value)
+               try:
+                   with urllib.request.urlopen(request, timeout=timeout) as response:
+                       body = response.read().decode("utf-8", errors="replace")
+                       return response.status, body
+               except urllib.error.HTTPError as err:
+                   try:
+                       body = err.read().decode("utf-8", errors="replace")
+                   except Exception:
+                       body = str(err)
+                   return err.code, body
+       
+    1:     def get(self, url: str, headers: Dict[str, str], timeout: int) -> Tuple[int, str]:
+    1:         request = urllib.request.Request(url=url, method="GET")
+    3:         for key, value in headers.items():
+    2:             if value:
+    1:                 request.add_header(key, value)
+    1:         try:
+    2:             with urllib.request.urlopen(request, timeout=timeout) as response:
+    1:                 body = response.read().decode("utf-8", errors="replace")
+    1:                 return response.status, body
+               except urllib.error.HTTPError as err:
+                   try:
+                       body = err.read().decode("utf-8", errors="replace")
+                   except Exception:
+                       body = str(err)
+                   return err.code, body
+       
+       
+    2: class AlertManager:
+    1:     def __init__(self, http_client: HttpClient):
+    9:         self.http_client = http_client
+    9:         self._last_alert_at: Optional[float] = None
+       
+    1:     def send_card(self, config: MonitorConfig, status: str, error: str, action: str) -> bool:
+    8:         now = time.time()
+    8:         if self._last_alert_at is not None:
+    1:             if now - self._last_alert_at < config.alert_cooldown_seconds:
+    1:                 return False
+    7:         payload = {
+    7:             "msg_type": "interactive",
+    7:             "card": {
+    7:                 "header": {"title": {"tag": "plain_text", "content": f"Feishu Monitor {status}"}},
+    7:                 "elements": [
+    7:                     {"tag": "markdown", "content": f"错误: {error or 'none'}"},
+    7:                     {"tag": "markdown", "content": f"动作: {action or 'none'}"},
+                       ],
+                   },
+               }
+   14:         code, _ = self.http_client.post_json(
+    7:             config.alert_webhook_url,
+    7:             payload,
+    7:             {"Content-Type": "application/json"},
+    7:             timeout=config.timeout_seconds,
+               )
+    7:         if code == 200:
+    7:             self._last_alert_at = now
+    7:             return True
+               return False
+       
+       
+    2: class ConnectionMonitor:
+    6:     def __init__(
+               self,
+    1:         config_manager: ConfigManager,
+    1:         logger: JsonlLogger,
+    2:         http_client: Optional[HttpClient] = None,
+    2:         clock: Callable[[], float] = time.time,
+    2:         sleeper: Callable[[int], None] = time.sleep,
+           ):
+    8:         self.config_manager = config_manager
+    8:         self.logger = logger
+    8:         self.http_client = http_client or HttpClient()
+    8:         self.alert_manager = AlertManager(self.http_client)
+    8:         self.clock = clock
+    8:         self.sleeper = sleeper
+    8:         self.status = "up"
+    8:         self.consecutive_failures = 0
+    8:         self.last_recovery_at: Optional[float] = None
+       
+    1:     def run_forever(self) -> None:
+    1:         while True:
+    1:             config = self.config_manager.load_if_changed()
+    1:             self.run_once(config)
+    1:             self.sleeper(config.heartbeat_seconds)
+       
+    1:     def run_once(self, config: Optional[MonitorConfig] = None) -> Dict[str, Any]:
+    8:         cfg = config or self.config_manager.load_if_changed()
+    8:         start = self.clock()
+    8:         send_ok, send_error = self._probe_send(cfg)
+    8:         recv_ok, recv_error = self._probe_receive(cfg)
+    8:         elapsed_ms = int((self.clock() - start) * 1000)
+    8:         if send_ok and recv_ok:
+    1:             self.status = "up"
+    1:             self.consecutive_failures = 0
+    1:             result = {
+    1:                 "status": "up",
+    1:                 "latency_ms": elapsed_ms,
+    1:                 "error": "",
+    1:                 "recovery_action": "",
+                   }
+    1:             self.logger.write(**result)
+    1:             return result
+    7:         self.consecutive_failures += 1
+   28:         error = "; ".join(v for v in [send_error, recv_error] if v)
+    7:         recovery_action = ""
+    7:         if self.consecutive_failures >= cfg.failure_threshold:
+    7:             self.status = "down"
+    7:             recovery_action = self._recover(cfg, error)
+    7:         result = {
+    7:             "status": self.status,
+    7:             "latency_ms": elapsed_ms,
+    7:             "error": error,
+    7:             "recovery_action": recovery_action,
+               }
+    7:         self.logger.write(**result)
+    7:         return result
+       
+    1:     def _probe_send(self, cfg: MonitorConfig) -> Tuple[bool, str]:
+   13:         code, body = self.http_client.get(cfg.send_probe_url, cfg.headers, cfg.timeout_seconds)
+   13:         if code == 200 and "ok" in body.lower():
+    6:             return True, ""
+    7:         return False, f"send_probe_failed:{code}:{body[:120]}"
+       
+    1:     def _probe_receive(self, cfg: MonitorConfig) -> Tuple[bool, str]:
+   13:         signal_file = Path(cfg.receive_signal_file)
+   13:         if signal_file.exists():
+    7:             age = self.clock() - signal_file.stat().st_mtime
+    7:             if age <= cfg.heartbeat_seconds + cfg.timeout_seconds:
+    1:                 return True, ""
+   12:         code, body = self.http_client.get(cfg.receive_probe_url, cfg.headers, cfg.timeout_seconds)
+   12:         if code == 200 and "ok" in body.lower():
+    5:             return True, ""
+    7:         return False, f"receive_probe_failed:{code}:{body[:120]}"
+       
+    1:     def _recover(self, cfg: MonitorConfig, error: str) -> str:
+    7:         now = self.clock()
+    7:         if self.last_recovery_at is not None:
+    1:             if now - self.last_recovery_at < cfg.idempotent_window_seconds:
+    1:                 return "suppress_recovery_in_window"
+    6:         self.last_recovery_at = now
+    6:         actions: List[str] = []
+    6:         if self._run_http_step(cfg.token_refresh_url, cfg):
+    5:             actions.append("refresh_token")
+    5:             if self._recovery_success(cfg):
+    5:                 self.status = "up"
+    5:                 self.consecutive_failures = 0
+    5:                 self.alert_manager.send_card(cfg, "recovering", error, ",".join(actions))
+    5:                 return ",".join(actions)
+               else:
+    1:             actions.append("refresh_token_failed")
+    1:         if self._run_http_step(cfg.channel_rebuild_url, cfg):
+                   actions.append("rebuild_channel")
+                   if self._recovery_success(cfg):
+                       self.status = "up"
+                       self.consecutive_failures = 0
+                       self.alert_manager.send_card(cfg, "recovering", error, ",".join(actions))
+                       return ",".join(actions)
+               else:
+    1:             actions.append("rebuild_channel_failed")
+    1:         if self._restart_receiver(cfg.receiver_restart_cmd):
+                   actions.append("restart_receiver")
+                   if self._recovery_success(cfg):
+                       self.status = "up"
+                       self.consecutive_failures = 0
+                       self.alert_manager.send_card(cfg, "recovering", error, ",".join(actions))
+                       return ",".join(actions)
+               else:
+    1:             actions.append("restart_receiver_failed")
+    1:         actions.append("escalate_alert")
+    1:         self.status = "recovering"
+    1:         self.alert_manager.send_card(cfg, "down", error, ",".join(actions))
+    1:         return ",".join(actions)
+       
+    1:     def _run_http_step(self, url: str, cfg: MonitorConfig) -> bool:
+    7:         code, body = self.http_client.post_json(url, {"event": "recover"}, cfg.headers, cfg.timeout_seconds)
+    7:         return code == 200 and "ok" in body.lower()
+       
+    1:     def _restart_receiver(self, cmd: str) -> bool:
+    1:         proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    1:         return proc.returncode == 0
+       
+    1:     def _recovery_success(self, cfg: MonitorConfig) -> bool:
+    5:         self.sleeper(cfg.recovery_check_delay_seconds)
+    5:         send_ok, _ = self._probe_send(cfg)
+    5:         recv_ok, _ = self._probe_receive(cfg)
+    5:         return send_ok and recv_ok
