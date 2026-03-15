@@ -6,6 +6,12 @@ import pathlib
 import re
 import sys
 import urllib.request
+import ssl
+
+try:
+    import certifi
+except Exception:
+    certifi = None
 
 TAVILY_URL = "https://api.tavily.com/search"
 
@@ -55,7 +61,11 @@ def tavily_search(query: str, max_results: int, include_answer: bool, search_dep
         method="POST",
     )
 
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    context = None
+    if certifi is not None:
+        context = ssl.create_default_context(cafile=certifi.where())
+
+    with urllib.request.urlopen(req, timeout=30, context=context) as resp:
         body = resp.read().decode("utf-8", errors="replace")
 
     try:
