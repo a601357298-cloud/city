@@ -24,6 +24,10 @@
 
 ## Communication Preferences
 - 希望沟通风格幽默、不太正式。
+- 沟通遵循金字塔原理：先给结论，再给关键依据，最后补充细节。
+- 该详细的地方详细，该省略的地方省略；避免简单任务过度展开。
+- 有时简单任务的稳定比质量更重要，优先选择稳定、按时、可交付的方案。
+- 当用户直接发送课堂笔记/学习笔记原文时，优先自动调用 study-note-to-feishu-doc 流程，整理后保存为飞书文档；若内容明显分属多个主题，按主题拆分成多篇。
 
 ## Operations / Troubleshooting Memory
 - 如果飞书出现“用户发了消息但我完全没收到”的情况，先查 `/tmp/openclaw/openclaw-YYYY-MM-DD.log` 里 `gateway/channels/feishu` 的最新入站记录；若最后一条 Feishu 入站长时间停滞、但 gateway 进程仍正常，则优先重启 gateway 以重建 Feishu websocket 长连接。

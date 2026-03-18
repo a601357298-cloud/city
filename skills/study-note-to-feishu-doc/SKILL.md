@@ -1,6 +1,6 @@
 ---
 name: study-note-to-feishu-doc
-description: Save learning notes sent in chat as new Feishu docs. Use when the user sends study notes, course notes, class summaries, training notes, or asks to archive notes into Feishu Docs. Extract the topic and date from the note content first; if extraction is uncertain, ask one short follow-up question. Create a new Feishu doc in the user's personal knowledge base with a title based on topic + date, and format the content into a clean, readable study note.
+description: Save learning notes sent in chat as new Feishu docs. Use when the user sends study notes, course notes, class summaries, training notes, asks to archive notes into Feishu Docs, or says to save/sort/organize the note as a Feishu document. Also use by default when the user's message clearly looks like raw study notes or dictated classroom notes, even if they did not explicitly ask to create a doc, unless they only want plain chat cleanup. Extract the topic and date first; if either is uncertain, ask one short follow-up question. Create one or more new Feishu docs in the user's personal knowledge base with titles based on topic + date, split mixed-topic notes into separate docs when the user asks or when the note is obviously divided into distinct subjects.
 ---
 
 # Study Note To Feishu Doc
@@ -14,16 +14,37 @@ Default behavior:
 - If either is unclear, ask **one short clarification**
 - Save the doc to **`my_library`** unless the user specifies another location
 - Create a **new** document instead of overwriting an old one
+- When the incoming message is clearly a raw note dump, default to creating the Feishu doc proactively instead of waiting for a second confirmation
+- When the note clearly contains two or more distinct topics, split it into multiple docs if the user asks to split, or ask one short question only if the split is ambiguous
 
 ## Workflow
 
 1. Read the note content from the current conversation.
-2. Identify the likely **topic**.
-3. Identify the likely **date**.
-4. If topic or date is uncertain, ask one concise follow-up question.
-5. Rewrite the note into clean Lark-flavored Markdown.
-6. Create a Feishu doc with `feishu_create_doc`.
-7. Return the doc link and a short summary of what was saved.
+2. Decide whether the message is a **raw study note** or just a normal question/chat.
+3. Identify the likely **topic**.
+4. Identify the likely **date**.
+5. Decide whether the content should stay in one doc or be split into multiple docs by topic.
+6. If topic/date/splitting is genuinely uncertain, ask one concise follow-up question.
+7. Rewrite the note into clean Lark-flavored Markdown.
+8. Create one or more Feishu docs with `feishu_create_doc`.
+9. Return the doc title(s), link(s), and a short summary of what was saved.
+
+## Automatic Trigger Heuristics
+
+Treat the message as a note that should be archived proactively when several of these signals are present:
+- long paragraph or multiple paragraphs of dense factual content
+- dictated/classroom style wording, including fragmented spoken phrases
+- many concept keywords, examples, code fragments, or API/function names
+- obvious learning structure such as definitions, points, methods, parameters, or "第一/第二/最后"
+- the user is continuing a running stream of class notes
+
+Do **not** auto-create a doc when the user is clearly just:
+- asking a question
+- requesting explanation only
+- brainstorming
+- sharing a tiny snippet that is not yet a note
+
+If the message is borderline, ask one short confirmation instead of assuming.
 
 ## Topic Extraction Rules
 
