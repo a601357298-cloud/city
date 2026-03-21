@@ -30,6 +30,9 @@
 - 当用户直接发送课堂笔记/学习笔记原文时，优先自动调用 study-note-to-feishu-doc 流程，整理后保存为飞书文档；若内容明显分属多个主题，按主题拆分成多篇。
 - 用户希望任务执行失败时，先明确回报失败信息、失败点和是否已成功送达，而不是沉默不回复。
 - 用户希望可重复的步骤、经验和信息收集流程尽量沉淀为可复用脚本或自动化流程，而不是每次都由助手手工重复执行；尤其像日报收集这类任务，应优先考虑用 Python 脚本抓取稳定来源（如虎嗅、36氪等）并持续迭代。
+- 外部 skill 的安装流程要优先保证安全：先审查来源与内容，再安装；查找路径优先走多路径（ClawHub/SkillHub → awesome 索引仓库 → GitHub 官方/开源仓库）。
+- 本机生成 Word 的稳定方案之一：使用 Anthropic 官方 `docx` skill 思路，本地 `npm install -g docx` 后若 Node 找不到全局模块，先设置 `export NODE_PATH="$(npm root -g)"` 再运行 Node 脚本。
+- 用户要求把“每周学习内容整理为周报”沉淀为可复用 skill，并安排每周日 09:00 自动执行。
 
 ## Operations / Troubleshooting Memory
 - 如果飞书出现“用户发了消息但我完全没收到”的情况，先查 `/tmp/openclaw/openclaw-YYYY-MM-DD.log` 里 `gateway/channels/feishu` 的最新入站记录；若最后一条 Feishu 入站长时间停滞、但 gateway 进程仍正常，则优先重启 gateway 以重建 Feishu websocket 长连接。
