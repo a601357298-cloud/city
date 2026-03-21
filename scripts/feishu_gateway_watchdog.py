@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import shlex
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, asdict
@@ -23,8 +24,24 @@ from pathlib import Path
 from typing import Optional
 
 DEFAULT_LOG_DIR = Path.home() / ".openclaw" / "watchdog-logs"
-DEFAULT_STATUS_CMD = "openclaw gateway status"
-DEFAULT_RESTART_CMD = "openclaw gateway restart"
+
+
+def resolve_openclaw_cmd() -> str:
+    candidates = [
+        shutil.which("openclaw"),
+        str(Path.home() / ".npm-global" / "bin" / "openclaw"),
+        "/opt/homebrew/bin/openclaw",
+        "/usr/local/bin/openclaw",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            return candidate
+    return "openclaw"
+
+
+OPENCLAW_CMD = resolve_openclaw_cmd()
+DEFAULT_STATUS_CMD = f"{shlex.quote(OPENCLAW_CMD)} gateway status"
+DEFAULT_RESTART_CMD = f"{shlex.quote(OPENCLAW_CMD)} gateway restart"
 
 
 @dataclass
