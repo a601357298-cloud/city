@@ -32,8 +32,9 @@
 - 用户希望可重复的步骤、经验和信息收集流程尽量沉淀为可复用脚本或自动化流程，而不是每次都由助手手工重复执行；尤其像日报收集这类任务，应优先考虑用 Python 脚本抓取稳定来源（如虎嗅、36氪等）并持续迭代。
 - 外部 skill 的安装流程要优先保证安全：先审查来源与内容，再安装；查找路径优先走多路径（ClawHub/SkillHub → awesome 索引仓库 → GitHub 官方/开源仓库）。
 - 本机生成 Word 的稳定方案之一：使用 Anthropic 官方 `docx` skill 思路，本地 `npm install -g docx` 后若 Node 找不到全局模块，先设置 `export NODE_PATH="$(npm root -g)"` 再运行 Node 脚本。
-- 用户要求把“每周学习内容整理为周报”沉淀为可复用 skill，并安排每周日 09:00 自动执行。
+- 用户要求把“每周学习内容整理为周报”沉淀为可复用 skill，并安排每周日 09:00 自动执行；素材范围默认只抓**本周新增**的飞书文档，不默认抓旧文档。
 
 ## Operations / Troubleshooting Memory
 - 如果飞书出现“用户发了消息但我完全没收到”的情况，先查 `/tmp/openclaw/openclaw-YYYY-MM-DD.log` 里 `gateway/channels/feishu` 的最新入站记录；若最后一条 Feishu 入站长时间停滞、但 gateway 进程仍正常，则优先重启 gateway 以重建 Feishu websocket 长连接。
 - 当天若同时出现 `open.feishu.cn` DNS 解析失败（ENOTFOUND）或网络接口变化异常，说明问题更像是网络/长连接失活，而不是单次回复失败。
+- 若本机 Python 访问 `open.feishu.cn`、`github.com`、`pypi.org` 等多个 HTTPS 站点同时出现 `CERTIFICATE_VERIFY_FAILED` / `unable to get local issuer certificate`，优先怀疑 **Python 默认 CA 路径失效**，而不是飞书本身故障。重点检查 `ssl.get_default_verify_paths()` 指向的 `cert.pem` 是否存在；若默认路径缺失，但 `certifi.where()` 可用，可先用 certifi CA 包验证。若恢复后对 `open.feishu.cn/open-apis/bot/v3/info` 返回 `HTTP 400`，这通常表示 **TLS 已正常、只是业务参数不对**，不应再误判为证书问题。
