@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>神通数据库模拟题刷题页</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --primary-soft: #dbeafe;
+      --good: #16a34a;
+      --good-soft: #dcfce7;
+      --bad: #dc2626;
+      --bad-soft: #fee2e2;
+      --border: #e5e7eb;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(180deg, #eff6ff 0%, var(--bg) 180px);
+      color: var(--text);
+    }
+
+    .container {
+      width: min(980px, calc(100% - 32px));
+      margin: 32px auto 48px;
+    }
+
+    .hero {
+      background: var(--card);
+      border: 1px solid rgba(37, 99, 235, 0.12);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 32px;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      line-height: 1.7;
+      margin: 0;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      margin-top: 18px;
+    }
+
+    .btn {
+      appearance: none;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 8px 20px rgba(37, 99, 235, 0.24);
+    }
+    .btn-secondary {
+      background: #eef2ff;
+      color: #3730a3;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin: 20px 0 24px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat-label {
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+    }
+
+    .question-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 22px;
+      margin-bottom: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .question-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .q-index {
+      font-size: 14px;
+      color: var(--primary);
+      font-weight: 700;
+      background: var(--primary-soft);
+      padding: 6px 10px;
+      border-radius: 999px;
+    }
+
+    .q-status {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .question-text {
+      font-size: 18px;
+      line-height: 1.7;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .options {
+      display: grid;
+      gap: 12px;
+    }
+
+    .option {
+      width: 100%;
+      text-align: left;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: #fff;
+      font-size: 15px;
+      line-height: 1.6;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .option:hover {
+      border-color: #93c5fd;
+      background: #f8fbff;
+    }
+
+    .option.selected {
+      border-color: #60a5fa;
+      background: #eff6ff;
+    }
+
+    .option.correct {
+      border-color: var(--good);
+      background: var(--good-soft);
+      color: #166534;
+      font-weight: 700;
+    }
+
+    .option.wrong {
+      border-color: var(--bad);
+      background: var(--bad-soft);
+      color: #991b1b;
+      font-weight: 700;
+    }
+
+    .analysis {
+      margin-top: 16px;
+      border-radius: 14px;
+      padding: 16px;
+      display: none;
+      line-height: 1.8;
+      font-size: 15px;
+      border: 1px solid transparent;
+    }
+
+    .analysis.show { display: block; }
+    .analysis.correct {
+      background: var(--good-soft);
+      border-color: #86efac;
+    }
+    .analysis.wrong {
+      background: var(--bad-soft);
+      border-color: #fca5a5;
+    }
+
+    .analysis-title {
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .footer-tip {
+      color: var(--muted);
+      text-align: center;
+      margin-top: 28px;
+      font-size: 14px;
+    }
+
+    @media (max-width: 640px) {
+      .container { width: min(100% - 20px, 980px); margin-top: 20px; }
+      .hero, .question-card { padding: 18px; }
+      h1 { font-size: 26px; }
+      .question-text { font-size: 17px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <section class="hero">
+      <h1>神通数据库模拟题刷题页</h1>
+      <p class="subtitle">20 道客观题，点击选项后会立即显示对错、正确答案和解析。适合后天考试前狠狠干一轮。答错也别怕，网页会当场把坑给你指出来。</p>
+      <div class="toolbar">
+        <button class="btn btn-primary" id="resetBtn">重置本套题</button>
+        <button class="btn btn-secondary" id="expandBtn">展开全部解析</button>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat-card">
+        <div class="stat-label">已作答</div>
+        <div class="stat-value" id="answeredCount">0 / 20</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">答对</div>
+        <div class="stat-value" id="correctCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">当前得分</div>
+        <div class="stat-value" id="scoreText">0%</div>
+      </div>
+    </section>
+
+    <main id="quiz"></main>
+
+    <p class="footer-tip">建议刷法：先独立做完一遍，再点“重置本套题”二刷；错题重点盯住：主键 vs 唯一、WHERE vs HAVING、COUNT(*) vs COUNT(列)、NULL、TRUNCATE、UNION / UNION ALL。</p>
+  </div>
+
+  <script>
+    const questions = [
+      {
+        text: '神通数据库中，由区构成、创建表时至少会分配的逻辑存储单位是：',
+        options: { A: '块', B: '区', C: '段', D: '表空间' },
+        answer: 'C',
+        analysis: '段由多个区组成，创建一个表至少会对应一个段。块是最小存储单位，区是由连续块组成，表空间则比段更大。'
+      },
+      {
+        text: '下列关于数据库逻辑结构与物理结构关系的说法，正确的是：',
+        options: { A: '数据文件由表空间构成', B: '表空间由数据文件构成', C: '段由数据文件构成', D: '块由控制文件构成' },
+        answer: 'B',
+        analysis: '课件原话就是：表空间由数据文件构成，二者通常是 1:N 关系。别把物理文件和逻辑对象倒着记。'
+      },
+      {
+        text: '在数据库实例中，负责把数据缓冲区中的数据写入数据文件的后台进程是：',
+        options: { A: 'LGWR', B: 'CKPT', C: 'DBWR', D: 'ARCH' },
+        answer: 'C',
+        analysis: 'DBWR 管数据块落盘；LGWR 管日志缓冲区写在线日志；CKPT 负责检查点；ARCH 负责归档。这个组合题特别爱考。'
+      },
+      {
+        text: '下列属于共享内存的是：',
+        options: { A: 'PGA', B: 'SGA', C: '用户进程', D: '服务器进程' },
+        answer: 'B',
+        analysis: 'SGA 是共享内存，PGA 是私有内存。进程不是内存结构。'
+      },
+      {
+        text: '下列备份方式中，属于在线备份的是：',
+        options: { A: '冷备份', B: '热备份', C: '差异备份', D: '逻辑恢复' },
+        answer: 'B',
+        analysis: '热备份 = 联机备份 = 在线备份；冷备份是离线备份。差异备份是按策略分类，不等同于是否在线。'
+      },
+      {
+        text: '下列哪项属于表空间分类？',
+        options: { A: '数据表空间', B: '角色表空间', C: '用户表空间', D: '权限表空间' },
+        answer: 'A',
+        analysis: '课件里明确提到：数据表空间、临时表空间、撤销表空间。后面几个都是故意挖坑。'
+      },
+      {
+        text: '下列系统用户中，与审计最直接相关的是：',
+        options: { A: 'sysdba', B: 'sysaudit', C: 'public', D: 'guest' },
+        answer: 'B',
+        analysis: '审计相关重点记 sysaudit，另外还有 audit 角色。public 不是审计用户。'
+      },
+      {
+        text: '下列关于权限的说法，正确的是：',
+        options: { A: '`SELECT ANY TABLE` 属于对象权限', B: '`SELECT` 某张表属于系统权限', C: '系统权限针对某一类数据库对象的操作能力', D: '对象权限只能授予角色，不能授予用户' },
+        answer: 'C',
+        analysis: '系统权限是对某类对象的通用操作能力，比如 SELECT ANY TABLE；对象权限是对具体对象，如对某张表的 SELECT。'
+      },
+      {
+        text: '下列关于主键约束的说法，正确的是：',
+        options: { A: '一个表可以有多个主键', B: '主键允许为空', C: '主键非空且唯一', D: '主键不会自动建立索引' },
+        answer: 'C',
+        analysis: '主键的核心就是非空 + 唯一，一个表通常只有一个主键；建主键通常还会自动创建唯一索引。'
+      },
+      {
+        text: '下列关于 `UNIQUE` 约束的说法，正确的是：',
+        options: { A: '`UNIQUE` 与主键完全相同', B: '`UNIQUE` 可以为空', C: '一个表只能有一个 `UNIQUE`', D: '`UNIQUE` 不能作用于列' },
+        answer: 'B',
+        analysis: 'UNIQUE 和主键最常考的区别：UNIQUE 可以为空，而且一个表可以有多个 UNIQUE。'
+      },
+      {
+        text: '下列 SQL 语句中，通常不能回滚且不能加 WHERE 的是：',
+        options: { A: 'DELETE', B: 'UPDATE', C: 'TRUNCATE', D: 'INSERT' },
+        answer: 'C',
+        analysis: 'TRUNCATE 用于快速清空表，没有 WHERE，通常不能回滚，也是常见陷阱题。'
+      },
+      {
+        text: '关于视图的描述，正确的是：',
+        options: { A: '视图存放真实业务数据', B: '视图本质上是虚表', C: '视图不能授权', D: '视图只能来自单表查询' },
+        answer: 'B',
+        analysis: '视图存定义，不存真实数据；而且视图可以用于权限控制，也不只限于单表查询。'
+      },
+      {
+        text: '存储过程参数的默认模态是：',
+        options: { A: 'OUT', B: 'RETURN', C: 'IN OUT', D: 'IN' },
+        answer: 'D',
+        analysis: '过程参数默认是 IN，OUT 和 IN OUT 都需要显式写。'
+      },
+      {
+        text: '下列索引中，按唯一性分类的是：',
+        options: { A: 'B树索引、位图索引', B: '单列索引、复合索引', C: '唯一索引、非唯一索引', D: '普通索引、系统索引' },
+        answer: 'C',
+        analysis: '按唯一性分：唯一索引、非唯一索引；按结构分：B 树索引、位图索引；按列分：单列、复合、函数索引。'
+      },
+      {
+        text: '下列哪条语句用于切换模式？',
+        options: { A: '`ALTER SCHEMA loandb;`', B: '`SET search_path TO loandb;`', C: '`USE loandb;`', D: '`CHANGE SCHEMA loandb;`' },
+        answer: 'B',
+        analysis: '课件给的原型就是 `SET search_path TO loandb;`，考试喜欢拿 MySQL 的 `USE` 来迷惑你。'
+      },
+      {
+        text: '在查询语句中，对分组统计结果进行筛选应使用：',
+        options: { A: 'WHERE', B: 'ORDER BY', C: 'HAVING', D: 'DISTINCT' },
+        answer: 'C',
+        analysis: 'WHERE 筛原始数据，HAVING 筛分组后的统计结果。这个属于数据库考试永恒保留节目。'
+      },
+      {
+        text: '下列关于 `COUNT(*)` 和 `COUNT(列名)` 的说法，正确的是：',
+        options: { A: '二者都不统计空值', B: '`COUNT(*)` 统计所有记录行数', C: '`COUNT(列名)` 统计所有记录行数', D: '`COUNT(*)` 只能用于单表查询' },
+        answer: 'B',
+        analysis: '`COUNT(*)` 统计总行数；`COUNT(列名)` 只统计该列非空的记录。别把这俩混了，不然分组题很容易寄。'
+      },
+      {
+        text: '判断某字段是否为空，正确写法是：',
+        options: { A: '`字段 = NULL`', B: '`字段 <> NULL`', C: '`字段 IS NULL`', D: '`字段 LIKE NULL`' },
+        answer: 'C',
+        analysis: 'NULL 不能用等号比较，必须用 `IS NULL` 或 `IS NOT NULL`。'
+      },
+      {
+        text: '下列关于 `UNION` 和 `UNION ALL` 的说法，正确的是：',
+        options: { A: '`UNION ALL` 会自动去重', B: '`UNION` 不要求列数一致', C: '`UNION` 会去重，`UNION ALL` 不去重', D: '两者都只能连接字符型字段' },
+        answer: 'C',
+        analysis: '`UNION` 自动去重，`UNION ALL` 保留重复行；同时它们都要求结果集列数一致、类型兼容。'
+      },
+      {
+        text: '下列函数中，属于窗口函数的是：',
+        options: { A: 'AVG()', B: 'NVL()', C: 'ROW_NUMBER()', D: 'TO_CHAR()' },
+        answer: 'C',
+        analysis: '`ROW_NUMBER()`、`RANK()`、`DENSE_RANK()` 都属于窗口函数，常和 `ORDER BY` 联用做排名。'
+      }
+    ];
+
+    const quizEl = document.getElementById('quiz');
+    const answeredCountEl = document.getElementById('answeredCount');
+    const correctCountEl = document.getElementById('correctCount');
+    const scoreTextEl = document.getElementById('scoreText');
+    const resetBtn = document.getElementById('resetBtn');
+    const expandBtn = document.getElementById('expandBtn');
+
+    let state = questions.map(() => ({ selected: null, correct: false, revealed: false }));
+    let expanded = false;
+
+    function render() {
+      quizEl.innerHTML = '';
+
+      questions.forEach((q, index) => {
+        const card = document.createElement('section');
+        card.className = 'question-card';
+
+        const userState = state[index];
+        const selected = userState.selected;
+        const isAnswered = selected !== null;
+        const isCorrect = userState.correct;
+
+        card.innerHTML = `
+          <div class="question-head">
+            <div class="q-index">第 ${index + 1} 题</div>
+            <div class="q-status">${isAnswered ? (isCorrect ? '✅ 已答对' : '❌ 已答错') : '未作答'}</div>
+          </div>
+          <div class="question-text">${q.text}</div>
+          <div class="options"></div>
+          <div class="analysis ${userState.revealed || expanded ? 'show' : ''} ${isAnswered ? (isCorrect ? 'correct' : 'wrong') : ''}">
+            <div class="analysis-title">${isAnswered ? (isCorrect ? '回答正确' : '回答错误') : '参考解析'}</div>
+            <div><strong>正确答案：</strong>${q.answer}. ${q.options[q.answer]}</div>
+            <div><strong>解析：</strong>${q.analysis}</div>
+          </div>
+        `;
+
+        const optionsEl = card.querySelector('.options');
+
+        Object.entries(q.options).forEach(([key, text]) => {
+          const btn = document.createElement('button');
+          btn.className = 'option';
+          btn.innerHTML = `<strong>${key}.</strong> ${text}`;
+
+          if (selected === key) btn.classList.add('selected');
+
+          if (isAnswered) {
+            if (key === q.answer) btn.classList.add('correct');
+            if (selected === key && key !== q.answer) btn.classList.add('wrong');
+          }
+
+          btn.addEventListener('click', () => answerQuestion(index, key));
+          optionsEl.appendChild(btn);
+        });
+
+        quizEl.appendChild(card);
+      });
+
+      updateStats();
+    }
+
+    function answerQuestion(index, optionKey) {
+      const q = questions[index];
+      state[index] = {
+        selected: optionKey,
+        correct: optionKey === q.answer,
+        revealed: true
+      };
+      render();
+      document.querySelectorAll('.question-card')[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function updateStats() {
+      const answered = state.filter(item => item.selected !== null).length;
+      const correct = state.filter(item => item.correct).length;
+      const score = answered ? Math.round((correct / answered) * 100) : 0;
+      answeredCountEl.textContent = `${answered} / ${questions.length}`;
+      correctCountEl.textContent = String(correct);
+      scoreTextEl.textContent = `${score}%`;
+    }
+
+    resetBtn.addEventListener('click', () => {
+      state = questions.map(() => ({ selected: null, correct: false, revealed: false }));
+      expanded = false;
+      expandBtn.textContent = '展开全部解析';
+      render();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    expandBtn.addEventListener('click', () => {
+      expanded = !expanded;
+      expandBtn.textContent = expanded ? '收起全部解析' : '展开全部解析';
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
