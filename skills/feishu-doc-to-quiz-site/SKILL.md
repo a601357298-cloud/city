@@ -1,6 +1,6 @@
 ---
 name: feishu-doc-to-quiz-site
-description: Turn a user-provided document or an existing Feishu document into a static quiz website, mainly multiple-choice questions, where clicking an option reveals the answer and explanation below the question. Use when the user asks to convert notes, study docs, Python docs, training materials, or Feishu documents into an answer-practice website; especially for requests like “整理成答题网站”, “做成选择题网站”, “点击答案显示解析”, “发布到 GitHub Pages”, or “把飞书文档做成刷题页”. Default source priority: (1) current message document/content, (2) explicitly provided Feishu doc link, (3) search existing Feishu docs.
+description: Turn a user-provided document or an existing Feishu document into a reusable static quiz website, mainly multiple-choice questions, where clicking an option reveals the answer and explanation below the question. Use when the user asks to convert notes, study docs, Python docs, training materials, or Feishu documents into an answer-practice website; especially for requests like “整理成答题网站”, “做成选择题网站”, “点击答案显示解析”, “发布到 GitHub Pages”, “固定模板复用”, or “把飞书文档做成刷题页”. Default source priority: (1) current message document/content, (2) explicitly provided Feishu doc link, (3) search existing Feishu docs. Default publishing template repo: a601357298-cloud/shentong. Support configurable question counts such as 10 / 20 / 30.
 ---
 
 # Feishu Doc To Quiz Site
@@ -15,17 +15,22 @@ Build a small static site from study material and publish it with minimal repo c
 - Default output is a static website whose home page is `index.html`.
 - Default interaction is: user clicks an option → show correctness + explanation directly under that question.
 - Prefer touching as few repo files as possible. If feasible, create or update only `index.html`.
+- Treat `a601357298-cloud/shentong` as the default publishing template repo unless the user explicitly overrides it.
+- Reuse the existing site template when available; change the quiz content first, and avoid unnecessary visual rewrites.
+- Support configurable question counts. If the user specifies a number, follow it; otherwise default to a compact set such as 10–20 questions.
 
 ## Workflow
 
 1. Identify the source material.
-2. Extract the core knowledge points.
-3. Rewrite them into mostly single-choice questions.
-4. Create a fully static `index.html` (HTML + CSS + JS inline is fine).
-5. Keep the site lightweight and dependency-free unless the repo clearly already uses a frontend stack and the user wants that.
-6. Commit only the necessary file changes.
-7. Push to the requested branch, usually `main`.
-8. Return and, if requested, send the final online link back to the user.
+2. Determine the requested question count.
+3. Extract the core knowledge points.
+4. Rewrite them into mostly single-choice questions.
+5. Reuse the existing site template whenever possible, replacing the quiz data/content first.
+6. Create or update a fully static `index.html` (HTML + CSS + JS inline is fine).
+7. Keep the site lightweight and dependency-free unless the repo clearly already uses a frontend stack and the user wants that.
+8. Commit only the necessary file changes.
+9. Push to the requested branch, usually `main`.
+10. Return and, if requested, send the final online link back to the user.
 
 ## Source selection rules
 
@@ -46,7 +51,8 @@ Build a small static site from study material and publish it with minimal repo c
 ## Question-writing rules
 
 - Make the site mainly multiple-choice questions.
-- Prefer 8–20 questions unless the user asks for a different size.
+- Support configurable counts such as 10 / 20 / 30 questions.
+- If the user does not specify a count, prefer a compact default like 10–20 questions based on source density.
 - Cover the main concepts, high-frequency pitfalls, definitions, flow, and practical usage.
 - Make distractors plausible but clearly wrong after explanation.
 - Do not invent content not supported by the source.
@@ -69,8 +75,9 @@ Build a small static site from study material and publish it with minimal repo c
 
 - Inspect the repo first.
 - Do not modify unrelated files.
+- Default target repo is `a601357298-cloud/shentong` unless the user overrides it.
 - If the repo is nearly empty, adding only `index.html` is preferred.
-- If the repo already has a static homepage, update only what is necessary.
+- If the repo already has a reusable static homepage/template, preserve the template and replace only the quiz content/data where practical.
 - Before commit, check `git status` and confirm the changed files are within scope.
 
 ## Git / publish rules
@@ -109,3 +116,5 @@ Before finishing, confirm all of these:
 - “做成静态网站，点击答案后显示解析”
 - “从我飞书现有文档里找一份 Python 学习笔记，整理成刷题网站并发布到 GitHub Pages”
 - “把这个培训文档做成题库网站，首页必须是 index.html”
+- “固定输出到 shentong 仓库模板，只更换内容”
+- “按 20 题生成一个答题网站”
