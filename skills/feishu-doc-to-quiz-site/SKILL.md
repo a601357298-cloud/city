@@ -14,6 +14,7 @@ Build a small static site from study material and publish it with minimal repo c
 - If no source is provided, search Feishu docs and choose the most relevant one.
 - Default output is a static website whose home page is `index.html`.
 - Default interaction is: user clicks an option → show correctness + explanation directly under that question.
+- Include a default **Export Wrong Answers** capability.
 - Prefer touching as few repo files as possible. If feasible, create or update only `index.html`.
 - Treat `a601357298-cloud/shentong` as the default publishing template repo unless the user explicitly overrides it.
 - Reuse the existing site template when available; change the quiz content first, and avoid unnecessary visual rewrites.
@@ -68,6 +69,15 @@ Build a small static site from study material and publish it with minimal repo c
   - click one option
   - highlight correct / incorrect state
   - reveal the explanation under the same question
+- Add a bottom-page button for exporting wrong answers.
+- Default export format is **Markdown**.
+- The exported Markdown should include at least:
+  - question text
+  - user's wrong choice
+  - correct answer
+  - explanation
+  - export timestamp
+- Export should work client-side in the browser, without requiring a backend.
 - Mobile-friendly layout by default.
 - Keep the copy clear and study-oriented rather than flashy.
 
@@ -103,6 +113,8 @@ Before finishing, confirm all of these:
 - `index.html` exists
 - Questions are mainly multiple-choice
 - Clicking an option reveals explanation below the question
+- A bottom-page export button exists
+- Wrong answers can be exported as Markdown
 - Only necessary files changed
 - Changes were committed
 - Changes were pushed to `main` if requested
@@ -118,3 +130,4 @@ Before finishing, confirm all of these:
 - “把这个培训文档做成题库网站，首页必须是 index.html”
 - “固定输出到 shentong 仓库模板，只更换内容”
 - “按 20 题生成一个答题网站”
+- “网站底部加一个导出错题按钮，导出成 Markdown”
