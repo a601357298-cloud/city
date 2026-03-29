@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "excel-xlsx": {
+      "version": "1.0.2",
+      "installedAt": 1773926283136
+    },
+    "word": {
+      "version": "1.0.0",
+      "installedAt": 1773926301141
+    },
+    "word-docx": {
+      "version": "1.0.2",
+      "installedAt": 1774749742270
+    }
+  }
+}
