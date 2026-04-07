@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>城市翻卡游戏</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="topbar">
+        <div class="timer-chip">
+          <span class="timer-label">计时</span>
+          <span id="timerText" class="timer-text">00:00</span>
+        </div>
+        <div class="timer-actions">
+          <button id="timerButton" class="timer-button" type="button">开始计时</button>
+          <button id="stopTimerButton" class="timer-button timer-stop-button" type="button">
+            中止计时
+          </button>
+        </div>
+      </div>
+
+      <header class="hero">
+        <p class="eyebrow">City Flip</p>
+        <h1>翻开这张卡，猜猜是哪座城</h1>
+        <p class="subtitle">
+          正面会把原图右上角的城市名遮住，点击翻面后，背面直接展示真实城市名区域。
+        </p>
+      </header>
+
+      <main class="game-layout">
+        <section class="card-stage">
+          <button id="cardButton" class="card-button" type="button" aria-label="翻卡">
+            <div id="card" class="flip-card">
+              <div class="flip-face flip-front">
+                <div class="image-frame">
+                  <img id="frontImage" alt="城市美食图片" />
+                  <div class="name-mask" aria-hidden="true">
+                    <span>???</span>
+                  </div>
+                </div>
+                <div class="face-footer">
+                  <span class="hint-pill">点一下翻面</span>
+                </div>
+              </div>
+
+              <div class="flip-face flip-back">
+                <div class="answer-panel">
+                  <p class="answer-label">答案揭晓</p>
+                  <div class="name-crop-frame">
+                    <img id="nameCropImage" alt="城市名区域" />
+                  </div>
+                  <p class="answer-tip">这里展示的是原图右上角的真实城市名。</p>
+                </div>
+                <div class="face-footer">
+                  <span class="hint-pill">再点一下换下一张</span>
+                </div>
+              </div>
+            </div>
+          </button>
+        </section>
+
+        <aside class="control-panel">
+          <div class="panel-card">
+            <p class="panel-label">当前进度</p>
+            <p id="progressText" class="progress-text">准备中...</p>
+          </div>
+
+          <div class="panel-card">
+            <p class="panel-label">当前状态</p>
+            <p id="statusText" class="status-text">正在读取图片库</p>
+          </div>
+
+          <div class="panel-actions">
+            <button id="flipButton" class="action-button action-primary" type="button">
+              翻开答案
+            </button>
+            <button id="nextButton" class="action-button action-secondary" type="button">
+              下一张
+            </button>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
